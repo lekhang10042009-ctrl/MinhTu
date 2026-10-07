@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BT21 Pastel Claw Machine - Game Gắp Thú Cute</title>
+    <!-- Tailwind CSS & FontAwesome -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- PeerJS cho Socket P2P -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap');
+        body { font-family: 'Fredoka', cursive, sans-serif; background: linear-gradient(135deg, #fce7f3 0%, #f3e8ff 50%, #e0f2fe 100%); }
+        .theme-pink { background: linear-gradient(to bottom, #fbcfe8, #f472b6); border-color: #f472b6; }
+        .theme-sakura { background: linear-gradient(to bottom, #fde2e4, #ffcad4); border-color: #ffb5a7; }
+        .theme-galaxy { background: linear-gradient(to bottom, #c084fc, #818cf8); border-color: #a855f7; }
+        .theme-gold { background: linear-gradient(to bottom, #fef08a, #facc15); border-color: #eab308; }
+        
+        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-6px); } }
+        .animate-float { animation: float 3s ease-in-out infinite; }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen items-center justify-center p-3 select-none">
+
+    <!-- 1. MÀN HÌNH ĐĂNG NHẬP / ĐĂNG KÝ (CUTE PASTEL) -->
+    <div id="auth-screen" class="w-full max-w-md bg-white/90 backdrop-blur-md rounded-3xl shadow-2xl p-8 border-4 border-pink-300">
+        <div class="text-center mb-6">
+            <div class="inline-block p-4 bg-pink-100 rounded-full mb-2 animate-float">
+                <span class="text-4xl">🌸🎀</span>
+            </div>
+            <h1 class="text-3xl font-extrabold text-pink-500 tracking-wide">BT21 CLAW MACHINE</h1>
+            <p class="text-pink-400 text-xs mt-1">Sưu tầm trọn bộ BT21 cực xịn xò ✨</p>
+        </div>
+
+        <div class="flex border-b-2 border-pink-100 mb-6">
+            <button id="tab-login" onclick="switchAuthTab('login')" class="flex-1 py-2 font-bold text-pink-500 border-b-4 border-pink-400">Đăng Nhập</button>
+            <button id="tab-register" onclick="switchAuthTab('register')" class="flex-1 py-2 font-bold text-gray-400">Đăng Ký</button>
+        </div>
+
+        <form id="auth-form" onsubmit="handleAuth(event)">
+            <div class="mb-4">
+                <label class="block text-pink-600 font-semibold text-sm mb-1">Tên tài khoản 👑</label>
+                <div class="relative">
+                    <i class="fa-solid fa-user-heart absolute left-3 top-3.5 text-pink-300"></i>
+                    <input type="text" id="username" required class="w-full pl-10 pr-4 py-3 rounded-2xl bg-pink-50/50 border-2 border-pink-200 focus:outline-none focus:border-pink-400 text-pink-700 placeholder-pink-300 text-sm" placeholder="Nhập tên đáng yêu của bạn...">
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-pink-600 font-semibold text-sm mb-1">Mật khẩu 🔒</label>
+                <div class="relative">
+                    <i class="fa-solid fa-key absolute left-3 top-3.5 text-pink-300"></i>
+                    <input type="password" id="password" required class="w-full pl-10 pr-4 py-3 rounded-2xl bg-pink-50/50 border-2 border-pink-200 focus:outline-none focus:border-pink-400 text-pink-700 placeholder-pink-300 text-sm" placeholder="Nhập mật khẩu bí mật...">
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between mb-6">
+                <label class="flex items-center text-xs text-pink-600 cursor-pointer">
+                    <input type="checkbox" id="remember-me" class="w-4 h-4 text-pink-500 rounded border-pink-300 focus:ring-pink-300">
+                    <span class="ml-2 font-medium">Ghi nhớ đăng nhập cho lần sau</span>
+                </label>
+            </div>
+
+            <button type="submit" id="auth-btn" class="w-full py-3.5 bg-gradient-to-r from-pink-400 to-rose-400 hover:from-pink-500 hover:to-rose-500 text-white font-bold rounded-2xl shadow-lg shadow-pink-200 transition transform active:scale-95">
+                Đăng Nhập Ngay 💖
+            </button>
+        </form>
+    </div>
+
+    <!-- 2. MÀN HÌNH CHÍNH GAME -->
+    <div id="game-screen" class="hidden w-full max-w-5xl flex-col items-center">
+        <!-- Dashboard Thông Tin -->
+        <div class="w-full bg-white/80 backdrop-blur-md rounded-3xl p-4 mb-4 shadow-xl flex flex-wrap justify-between items-center border-2 border-pink-200 gap-3">
+            <div class="flex items-center space-x-3">
+                <div class="w-12 h-12 bg-gradient-to-tr from-pink-400 to-purple-400 text-white rounded-2xl flex items-center justify-center font-bold text-xl shadow-md" id="user-avatar">👧</div>
+                <div>
+                    <h3 class="font-bold text-gray-800 text-base" id="user-display-name">Nữ Hoàng Gắp Thú</h3>
+                    <div class="flex space-x-3 text-xs mt-0.5">
+                        <span class="bg-pink-100 text-pink-600 px-2.5 py-1 rounded-full font-bold"><i class="fa-solid fa-ticket"></i> Lượt gắp: <b id="user-coins">10</b></span>
+                        <span class="bg-purple-100 text-purple-600 px-2.5 py-1 rounded-full font-bold"><i class="fa-solid fa-gem"></i> Token: <b id="user-tokens">50</b></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Điều hướng Tab -->
+            <div class="flex space-x-2">
+                <button onclick="openModal('quests-modal')" class="bg-gradient-to-r from-yellow-300 to-amber-400 text-amber-900 font-bold px-3 py-2 rounded-2xl text-xs shadow hover:scale-105 transition"><i class="fa-solid fa-scroll"></i> Nhiệm Vụ</button>
+                <button onclick="openModal('shop-modal')" class="bg-gradient-to-r from-purple-400 to-pink-400 text-white font-bold px-3 py-2 rounded-2xl text-xs shadow hover:scale-105 transition"><i class="fa-solid fa-store"></i> Cửa Hàng Máy</button>
+                <button onclick="logout()" class="bg-gray-100 text-gray-600 font-bold px-3 py-2 rounded-2xl text-xs hover:bg-gray-200 transition"><i class="fa-solid fa-right-from-bracket"></i> Đăng xuất</button>
+            </div>
+        </div>
+
+        <!-- Khung Game & Panel Bên -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+            <!-- Canvas Máy Gắp Thú -->
+            <div id="machine-container" class="md:col-span-2 theme-pink p-4 rounded-3xl shadow-2xl border-4 flex flex-col items-center transition-all duration-500">
+                <div class="w-full flex justify-between items-center mb-2 px-2 text-white font-bold text-sm">
+                    <span>✨ PASTEL CLAW MACHINE</span>
+                    <span id="p2p-badge" class="bg-white/30 px-2 py-0.5 rounded-full text-xs">P2P Peer: <b id="my-peer-id">...</b></span>
+                </div>
+
+                <canvas id="gameCanvas" width="500" height="380" class="w-full max-w-[500px] shadow-inner"></canvas>
+
+                <!-- Bảng Điều Khiển Machine -->
+                <div class="w-full flex items-center justify-around mt-4 bg-white/40 backdrop-blur-md p-3 rounded-2xl border border-white/50">
+                    <div class="flex space-x-3">
+                        <button onclick="moveClaw(-15)" class="w-12 h-12 bg-white text-pink-500 active:bg-pink-100 rounded-2xl text-xl shadow-lg font-bold flex items-center justify-center transition active:scale-90"><i class="fa-solid fa-arrow-left"></i></button>
+                        <button onclick="moveClaw(15)" class="w-12 h-12 bg-white text-pink-500 active:bg-pink-100 rounded-2xl text-xl shadow-lg font-bold flex items-center justify-center transition active:scale-90"><i class="fa-solid fa-arrow-right"></i></button>
+                    </div>
+                    <button onclick="dropClaw()" class="px-8 py-3.5 bg-gradient-to-r from-rose-400 to-pink-500 active:from-rose-600 text-white font-extrabold rounded-2xl shadow-xl hover:scale-105 active:scale-95 transition tracking-wider"><i class="fa-solid fa-hand-grab"></i> GẮP THÚ ✨</button>
+                </div>
+            </div>
+
+            <!-- Panel Cực Đẹp Bên Phải (Kết Nối & Bộ Sưu Tập BT21) -->
+            <div class="bg-white/80 backdrop-blur-md p-4 rounded-3xl shadow-xl border-2 border-pink-200 flex flex-col justify-between">
+                <div>
+                    <!-- Socket P2P -->
+                    <div class="mb-4 bg-pink-50 p-3 rounded-2xl border border-pink-200">
+                        <h4 class="font-bold text-pink-600 text-xs mb-1"><i class="fa-solid fa-network-wired"></i> Socket P2P Đấu Bạn Bè</h4>
+                        <div class="flex space-x-1 mt-2">
+                            <input type="text" id="target-peer-id" placeholder="Nhập ID Bạn Bè..." class="flex-1 text-xs p-2 rounded-xl border border-pink-300 focus:outline-none">
+                            <button onclick="connectToPeer()" class="bg-pink-500 text-white text-xs px-3 py-2 rounded-xl font-bold hover:bg-pink-600">Kết Nối</button>
+                        </div>
+                        <p id="peer-status" class="text-[10px] text-green-600 font-semibold mt-1">Đang hoạt động độc lập</p>
+                    </div>
+
+                    <!-- Bộ Sưu Tập Thú Gắp Được -->
+                    <h4 class="font-bold text-pink-600 text-xs mb-2 border-b border-pink-100 pb-1 flex justify-between">
+                        <span><i class="fa-solid fa-heart"></i> BT21 Đã Sưu Tầm</span>
+                        <span class="text-pink-400 text-[10px]" id="inventory-count">0 Bé</span>
+                    </h4>
+                    <div id="bt21-inventory" class="grid grid-cols-3 gap-2 text-center text-xs max-h-56 overflow-y-auto p-1">
+                        <!-- Items rendered by JS -->
+                    </div>
+                </div>
+                <div class="text-center text-[10px] text-pink-300 mt-2">Designed with 💕 for Girls</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL NHIỆM VỤ RECEIVE TOKEN -->
+    <div id="quests-modal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl border-4 border-amber-200">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-lg text-amber-600"><i class="fa-solid fa-scroll"></i> Nhiệm Vụ Hàng Ngày</h3>
+                <button onclick="closeModal('quests-modal')" class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+            </div>
+            <div class="space-y-3" id="quests-list">
+                <!-- Quests loaded by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL SHOP MÁY GẮP THÚ -->
+    <div id="shop-modal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-white w-full max-w-lg rounded-3xl p-6 shadow-2xl border-4 border-purple-200">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-lg text-purple-600"><i class="fa-solid fa-store"></i> Cửa Hàng Giao Diện Máy</h3>
+                <button onclick="closeModal('shop-modal')" class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+            </div>
+            <div class="grid grid-cols-2 gap-3" id="shop-items">
+                <!-- Shop items loaded by JS -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. BT21 CHARACTERS & RARITY SYSTEM ---
+        const BT21_CHARACTERS = [
+            { id: 'rj', name: 'RJ', color: '#ffffff', faceColor: '#fca5a5', rarity: 'Thường', rate: 0.25, badge: 'bg-gray-100 text-gray-600' },
+            { id: 'koya', name: 'KOYA', color: '#60a5fa', faceColor: '#ffffff', rarity: 'Thường', rate: 0.25, badge: 'bg-gray-100 text-gray-600' },
+            { id: 'chimmy', name: 'CHIMMY', color: '#facc15', faceColor: '#ffffff', rarity: 'Hiếm', rate: 0.15, badge: 'bg-blue-100 text-blue-600' },
+            { id: 'cooky', name: 'COOKY', color: '#f472b6', faceColor: '#ffffff', rarity: 'Hiếm', rate: 0.15, badge: 'bg-blue-100 text-blue-600' },
+            { id: 'shooky', name: 'SHOOKY', color: '#a16207', faceColor: '#fef08a', rarity: 'Hiếm', rate: 0.10, badge: 'bg-blue-100 text-blue-600' },
+            { id: 'mang', name: 'MANG', color: '#c084fc', faceColor: '#38bdf8', rarity: 'Siêu Hiếm', rate: 0.07, badge: 'bg-purple-100 text-purple-600 font-bold' },
+            { id: 'tata', name: 'TATA', color: '#ef4444', faceColor: '#fef08a', rarity: 'Huyền Thoại', rate: 0.03, badge: 'bg-amber-100 text-amber-600 font-extrabold animate-pulse' }
+        ];
+
+        // --- 2. THEMES & SHOP SYSTEM ---
+        const MACHINE_THEMES = [
+            { id: 'theme-pink', name: 'Sweet Pink', price: 0, css: 'theme-pink', desc: 'Máy mặc định hồng ngột ngào' },
+            { id: 'theme-sakura', name: 'Sakura Cloud', price: 30, css: 'theme-sakura', desc: 'Phong cách hoa anh đào thơ mộng' },
+            { id: 'theme-galaxy', name: 'Cyber Galaxy', price: 60, css: 'theme-galaxy', desc: 'Vũ trụ huyền ảo tím mộng mơ' },
+            { id: 'theme-gold', name: 'Gold Princess', price: 100, css: 'theme-gold', desc: 'Hoàng gia lấp lánh sang chảnh' }
+        ];
+
+        // --- 3. AUTH & USER DATA (LOCALSTORAGE) ---
+        let currentAuthMode = 'login';
+        let currentUser = null;
+
+        window.onload = function() {
+            const savedUser = localStorage.getItem('bt21_remembered_user');
+            if (savedUser) {
+                loginSuccess(JSON.parse(savedUser));
+            }
+        };
+
+        function switchAuthTab(mode) {
+            currentAuthMode = mode;
+            document.getElementById('tab-login').className = mode === 'login' ? "flex-1 py-2 font-bold text-pink-500 border-b-4 border-pink-400" : "flex-1 py-2 font-bold text-gray-400";
+            document.getElementById('tab-register').className = mode === 'register' ? "flex-1 py-2 font-bold text-pink-500 border-b-4 border-pink-400" : "flex-1 py-2 font-bold text-gray-400";
+            document.getElementById('auth-btn').innerText = mode === 'login' ? "Đăng Nhập Ngay 💖" : "Đăng Ký Tài Khoản 🎉";
+        }
+
+        function handleAuth(e) {
+            e.preventDefault();
+            const u = document.getElementById('username').value.trim();
+            const p = document.getElementById('password').value;
+            const remember = document.getElementById('remember-me').checked;
+            const db = JSON.parse(localStorage.getItem('bt21_users_db') || '{}');
+
+            if (currentAuthMode === 'register') {
+                if (db[u]) return alert('Tài khoản đã tồn tại!');
+                db[u] = { password: btoa(p), coins: 10, tokens: 50, inventory: [], activeTheme: 'theme-pink', unlockedThemes: ['theme-pink'], completedQuests: [] };
+                localStorage.setItem('bt21_users_db', JSON.stringify(db));
+                alert('Đăng ký thành công!');
+                switchAuthTab('login');
+            } else {
+                if (!db[u] || db[u].password !== btoa(p)) return alert('Sai tên tài khoản hoặc mật khẩu!');
+                const userData = { username: u, ...db[u] };
+                if (remember) localStorage.setItem('bt21_remembered_user', JSON.stringify(userData));
+                loginSuccess(userData);
+            }
+        }
+
+        function loginSuccess(userData) {
+            currentUser = userData;
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            document.getElementById('game-screen').classList.add('flex');
+
+            document.getElementById('user-display-name').innerText = currentUser.username;
+            document.getElementById('user-avatar').innerText = currentUser.username[0].toUpperCase();
+            updateUIStats();
+
+            applyTheme(currentUser.activeTheme || 'theme-pink');
+            initPeerJS();
+            initGameCanvas();
+            renderInventory();
+            renderQuests();
+            renderShop();
+        }
+
+        function updateUIStats() {
+            document.getElementById('user-coins').innerText = currentUser.coins;
+            document.getElementById('user-tokens').innerText = currentUser.tokens;
+        }
+
+        function logout() {
+            localStorage.removeItem('bt21_remembered_user');
+            location.reload();
+        }
+
+        // --- 4. PEERJS SOCKET P2P REALTIME ---
+        let peer = null, peerConn = null;
+
+        function initPeerJS() {
+            peer = new Peer();
+            peer.on('open', (id) => document.getElementById('my-peer-id').innerText = id);
+            peer.on('connection', (conn) => {
+                peerConn = conn;
+                setupSocketEvents();
+                document.getElementById('peer-status').innerText = "Đang kết nối 1v1 P2P!";
+            });
+        }
+
+        function connectToPeer() {
+            const targetId = document.getElementById('target-peer-id').value.trim();
+            if (!targetId) return;
+            peerConn = peer.connect(targetId);
+            setupSocketEvents();
+        }
+
+        function setupSocketEvents() {
+            peerConn.on('open', () => document.getElementById('peer-status').innerText = "Kết nối thành công!");
+            peerConn.on('data', (data) => {
+                if (data.type === 'MOVE') claw.x = data.x;
+                if (data.type === 'DROP') dropClaw();
+            });
+        }
+
+        function sendSocketCommand(data) {
+            if (peerConn && peerConn.open) peerConn.send(data);
+        }
+
+        // --- 5. CANVAS & CLAW MACHINE LOGIC ---
+        let canvas, ctx;
+        let claw = { x: 250, y: 40, state: 'IDLE', grabbedToy: null };
+        let toys = [];
+
+        function initGameCanvas() {
+            canvas = document.getElementById('gameCanvas');
+            ctx = canvas.getContext('2d');
+            spawnToys();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function spawnToys() {
+            toys = [];
+            for (let i = 0; i < 8; i++) {
+                // Spawn ngẫu nhiên theo tỷ lệ độ hiếm
+                let rand = Math.random();
+                let cumulative = 0;
+                let selectedChar = BT21_CHARACTERS[0];
+                for (let c of BT21_CHARACTERS) {
+                    cumulative += c.rate;
+                    if (rand <= cumulative) { selectedChar = c; break; }
+                }
+
+                toys.push({
+                    x: 50 + i * 52 + Math.random() * 8,
+                    y: 320,
+                    radius: 20,
+                    char: selectedChar
+                });
+            }
+        }
+
+        function moveClaw(dir) {
+            if (claw.state !== 'IDLE') return;
+            claw.x = Math.max(40, Math.min(460, claw.x + dir));
+            sendSocketCommand({ type: 'MOVE', x: claw.x });
+        }
+
+        function dropClaw() {
+            if (claw.state !== 'IDLE') return;
+            if (currentUser.coins <= 0) return alert("Bạn đã hết lượt gắp! Làm nhiệm vụ để nhận thêm nhé ✨");
+            currentUser.coins--;
+            updateUIStats();
+            saveUserData();
+
+            claw.state = 'DROPPING';
+            sendSocketCommand({ type: 'DROP' });
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Cập nhật trạng thái Càng
+            if (claw.state === 'DROPPING') {
+                claw.y += 3;
+                if (!claw.grabbedToy) {
+                    for (let toy of toys) {
+                        if (Math.hypot(claw.x - toy.x, claw.y - toy.y) < toy.radius + 8) {
+                            claw.grabbedToy = toy;
+                            break;
+                        }
+                    }
+                }
+                if (claw.y >= 300) claw.state = 'RETURNING';
+            } else if (claw.state === 'RETURNING') {
+                claw.y -= 3;
+                if (claw.grabbedToy) {
+                    claw.grabbedToy.x = claw.x;
+                    claw.grabbedToy.y = claw.y + 20;
+                }
+                if (claw.y <= 40) {
+                    claw.state = 'IDLE';
+                    if (claw.grabbedToy) {
+                        let grabbed = claw.grabbedToy.char;
+                        alert(`🎉 CHÚC MỪNG! Bạn gắp được [${grabbed.rarity}] ${grabbed.name}!`);
+                        currentUser.inventory.push(grabbed);
+                        toys = toys.filter(t => t !== claw.grabbedToy);
+                        claw.grabbedToy = null;
+                        if (toys.length < 3) spawnToys();
+                        saveUserData();
+                        renderInventory();
+                    }
+                }
+            }
+
+            // Dây cáp
+            ctx.strokeStyle = '#f472b6';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(claw.x, 0);
+            ctx.lineTo(claw.x, claw.y);
+            ctx.stroke();
+
+            // Càng Gắp
+            ctx.fillStyle = '#db2777';
+            ctx.fillRect(claw.x - 12, claw.y, 24, 8);
+            ctx.beginPath();
+            ctx.arc(claw.x - 10, claw.y + 12, 10, Math.PI, Math.PI * 0.5, true);
+            ctx.arc(claw.x + 10, claw.y + 12, 10, Math.PI * 0.5, 0, true);
+            ctx.stroke();
+
+            // Vẽ BT21
+            for (let toy of toys) drawBT21Character(ctx, toy.x, toy.y, toy.radius, toy.char);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function drawBT21Character(ctx, x, y, r, char) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fillStyle = char.color;
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#333';
+            ctx.stroke();
+
+            // Face
+            ctx.beginPath();
+            ctx.arc(x, y + 2, r * 0.55, 0, Math.PI * 2);
+            ctx.fillStyle = char.faceColor;
+            ctx.fill();
+
+            // Eyes
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(x - 5, y - 2, 2, 0, Math.PI * 2);
+            ctx.arc(x + 5, y - 2, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // --- 6. SHOP & QUESTS MANAGEMENT ---
+        function renderInventory() {
+            const container = document.getElementById('bt21-inventory');
+            container.innerHTML = '';
+            document.getElementById('inventory-count').innerText = `${currentUser.inventory.length} Bé`;
+            
+            currentUser.inventory.forEach(item => {
+                const el = document.createElement('div');
+                el.className = "p-2 bg-white rounded-2xl shadow border border-pink-100 flex flex-col items-center relative";
+                el.innerHTML = `
+                    <span class="text-[9px] px-1.5 py-0.5 rounded-full mb-1 ${item.badge}">${item.rarity}</span>
+                    <span class="w-7 h-7 rounded-full border border-gray-300 block mb-1 shadow-sm" style="background:${item.color}"></span>
+                    <b class="text-gray-700 text-[11px]">${item.name}</b>
+                `;
+                container.appendChild(el);
+            });
+        }
+
+        function renderQuests() {
+            const quests = [
+                { id: 'q1', title: 'Điểm danh hôm nay 🌸', rewardTokens: 20, rewardCoins: 5 },
+                { id: 'q2', title: 'Thử kết nối Socket P2P ⚡', rewardTokens: 30, rewardCoins: 5 }
+            ];
+            const container = document.getElementById('quests-list');
+            container.innerHTML = '';
+
+            quests.forEach(q => {
+                const isDone = currentUser.completedQuests.includes(q.id);
+                const div = document.createElement('div');
+                div.className = "p-3 bg-amber-50 rounded-2xl border border-amber-200 flex justify-between items-center";
+                div.innerHTML = `
+                    <div>
+                        <h5 class="font-bold text-amber-800 text-xs">${q.title}</h5>
+                        <p class="text-[10px] text-amber-600">+${q.rewardTokens} Token, +${q.rewardCoins} Lượt gắp</p>
+                    </div>
+                    <button onclick="claimQuest('${q.id}', ${q.rewardTokens}, ${q.rewardCoins})" 
+                        class="px-3 py-1.5 rounded-xl text-xs font-bold ${isDone ? 'bg-gray-200 text-gray-400' : 'bg-amber-400 text-amber-900 hover:bg-amber-500'}" 
+                        ${isDone ? 'disabled' : ''}>
+                        ${isDone ? 'Đã Nhận' : 'Nhận'}
+                    </button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function claimQuest(id, tokens, coins) {
+            currentUser.tokens += tokens;
+            currentUser.coins += coins;
+            currentUser.completedQuests.push(id);
+            updateUIStats();
+            saveUserData();
+            renderQuests();
+        }
+
+        function renderShop() {
+            const container = document.getElementById('shop-items');
+            container.innerHTML = '';
+
+            MACHINE_THEMES.forEach(t => {
+                const isUnlocked = currentUser.unlockedThemes.includes(t.id);
+                const isActive = currentUser.activeTheme === t.id;
+                const div = document.createElement('div');
+                div.className = "p-3 bg-purple-50 rounded-2xl border border-purple-200 flex flex-col justify-between";
+                div.innerHTML = `
+                    <div>
+                        <h5 class="font-bold text-purple-800 text-xs">${t.name}</h5>
+                        <p class="text-[10px] text-purple-600 mt-1">${t.desc}</p>
+                    </div>
+                    <button onclick="buyOrEquipTheme('${t.id}', ${t.price})" 
+                        class="mt-3 py-1.5 rounded-xl text-xs font-bold w-full ${isActive ? 'bg-green-500 text-white' : isUnlocked ? 'bg-purple-400 text-white' : 'bg-purple-200 text-purple-700'}">
+                        ${isActive ? 'Đang Dùng' : isUnlocked ? 'Sử Dụng' : `Mua (${t.price} Gem)`}
+                    </button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function buyOrEquipTheme(themeId, price) {
+            if (currentUser.unlockedThemes.includes(themeId)) {
+                applyTheme(themeId);
+            } else {
+                if (currentUser.tokens < price) return alert("Bạn không đủ Token!");
+                currentUser.tokens -= price;
+                currentUser.unlockedThemes.push(themeId);
+                applyTheme(themeId);
+            }
+            saveUserData();
+            renderShop();
+            updateUIStats();
+        }
+
+        function applyTheme(themeId) {
+            currentUser.activeTheme = themeId;
+            const container = document.getElementById('machine-container');
+            container.className = `md:col-span-2 p-4 rounded-3xl shadow-2xl border-4 flex flex-col items-center transition-all duration-500 ${themeId}`;
+        }
+
+        function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        function saveUserData() {
+            const db = JSON.parse(localStorage.getItem('bt21_users_db') || '{}');
+            db[currentUser.username] = {
+                password: currentUser.password,
+                coins: currentUser.coins,
+                tokens: currentUser.tokens,
+                inventory: currentUser.inventory,
+                activeTheme: currentUser.activeTheme,
+                unlockedThemes: currentUser.unlockedThemes,
+                completedQuests: currentUser.completedQuests
+            };
+            localStorage.setItem('bt21_users_db', JSON.stringify(db));
+            if (localStorage.getItem('bt21_remembered_user')) {
+                localStorage.setItem('bt21_remembered_user', JSON.stringify(currentUser));
+            }
+        }
+    </script>
+</body>
+</html>
